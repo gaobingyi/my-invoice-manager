@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#7DB9F2"/>
+            <stop offset="100%" stop-color="#4A90D9"/>
+        </linearGradient>
+        <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#F0F6FF"/>
+        </linearGradient>
+        <linearGradient id="stamp" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#54C8FF"/>
+            <stop offset="100%" stop-color="#2E86DE"/>
+        </linearGradient>
+        <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+            <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#1B4E8A" flood-opacity="0.35"/>
+        </filter>
+        <filter id="cardShadow" x="-30%" y="-30%" width="170%" height="180%">
+            <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1B4E8A" flood-opacity="0.28"/>
+        </filter>
+    </defs>
+
+    <rect x="20" y="20" width="472" height="472" rx="120" fill="url(#bg)"/>
+    <rect x="20" y="20" width="472" height="240" rx="120" fill="url(#sheen)" clip-path="url(#clipTop)"/>
+    <clipPath id="clipTop">
+        <rect x="20" y="20" width="472" height="240" rx="120"/>
+    </clipPath>
+
+    <g filter="url(#cardShadow)">
+        <rect x="150" y="108" width="212" height="296" rx="24" fill="url(#paper)"
+              transform="rotate(-4 256 256)"/>
+    </g>
+
+    <g transform="rotate(-4 256 256)">
+        <rect x="196" y="152" width="120" height="20" rx="10" fill="#BFD8F5"/>
+        <path d="M190 208 h132 M190 240 h132 M190 272 h84 M190 304 h132 M190 336 h96"
+              stroke="#CFE0F7" stroke-width="14" stroke-linecap="round"/>
+        <rect x="296" y="288" width="40" height="40" rx="20" fill="url(#stamp)" filter="url(#shadow)"/>
+        <text x="316" y="316" font-family="Arial, Helvetica, sans-serif" font-size="27"
+              font-weight="bold" fill="#FFFFFF" text-anchor="middle">¥</text>
+    </g>
+
+    <circle cx="256" cy="446" r="6" fill="#7DB9F2"/>
+</svg>
