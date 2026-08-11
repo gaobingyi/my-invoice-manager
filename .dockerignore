@@ -1,0 +1,12 @@
+**/.git
+**/.env
+**/.env.*
+**/.idea
+**/target
+**/node_modules
+**/dist
+server/uploads
+server/logs
+invoice_examples
+*.md
+.claude

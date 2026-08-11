@@ -1,0 +1,29 @@
+# ---- Java / Maven ----
+server/target/
+*.class
+*.jar
+
+# ---- Node / Vite ----
+web/node_modules/
+web/dist/
+npm-debug.log*
+
+# ---- 运行时数据 ----
+server/uploads/
+server/logs/
+
+# ---- 测试样例 ----
+invoice_examples/
+web/e2e/screenshots/
+
+# ---- 环境与密钥 ----
+.env
+.env.local
+.mcp.json
+
+# ---- IDE ----
+.idea/
+server/.idea/
+*.iml
+.vscode/
+.DS_Store
