@@ -112,6 +112,12 @@ onMounted(load)
 </script>
 
 <style scoped>
+:deep(.main > div > .el-card) {
+  width: 100%;
+}
+:deep(.el-card__body) {
+  padding: 3px;
+}
 .pager {
   margin-top: 16px;
   justify-content: flex-end;

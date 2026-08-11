@@ -67,9 +67,10 @@ try {
   // --- 1. load ---
   console.log('\n1) 加载页面')
   await page.goto(BASE, { waitUntil: 'networkidle0', timeout: 20000 })
-  await page.waitForSelector('table', { timeout: 10000 })
-  check('表格渲染', true)
-  await page.screenshot({ path: path.join(SHOT_DIR, '1-list.png') })
+  // 默认是上传视图；在 upload 视图找到 file input 即视为就绪
+  await page.waitForSelector('input[type=file]', { timeout: 10000 })
+  check('上传视图就绪', true)
+  await page.screenshot({ path: path.join(SHOT_DIR, '1-upload.png') })
 
   // --- 2. upload (two invoices consecutively) ---
   console.log('\n2) 连续上传发票')
@@ -83,10 +84,11 @@ try {
   const btnText = await page.$eval('.upload-btn', b => b.textContent).catch(() => '')
   check(`批量选择后按钮显示数量 (${btnText.trim()})`, btnText.includes('2'))
   await page.click('.upload-btn:not(.is-disabled)')
-  // wait for both rows to appear
+  // 上传成功 emit('uploaded')，App 自动跳列表
+  await page.waitForSelector('table', { timeout: 15000 })
   await page.waitForFunction(
-    (n) => document.querySelectorAll('tbody tr').length >= n + 2,
-    { timeout: 15000 }, rowsBefore
+    () => document.querySelectorAll('tbody tr').length >= 2,
+    { timeout: 15000 }
   )
   const rowsAfter = await page.$$eval('tbody tr', trs => trs.length)
   check(`批量上传后行数 ${rowsBefore} → ${rowsAfter}`, rowsAfter >= rowsBefore + 2)

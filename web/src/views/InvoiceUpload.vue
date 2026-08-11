@@ -54,6 +54,8 @@ function onExceed() {
   ElMessage.warning('一次最多选 20 张（后端单请求限制 10MB，20 张超出请分批）')
 }
 
+const emit = defineEmits(['uploaded'])
+
 async function doUpload() {
   if (!files.value.length) return
   uploading.value = true
@@ -68,8 +70,12 @@ async function doUpload() {
         ElMessage.error(`${f.name} 上传失败: ${e.response?.data || ''}`)
       }
     }
-    // pocfile: a duplicate number counts as a failure (the backend rejects it with 409)
-    if (ok) ElMessage.success(`成功 ${ok} 张${fail ? `，失败 ${fail} 张` : ''}`)
+    if (ok) {
+      ElMessage.success(`成功 ${ok} 张${fail ? `，失败 ${fail} 张` : ''}`)
+      if (!fail) emit('uploaded')
+    } else if (fail) {
+      ElMessage.error(`上传失败 ${fail} 张，请检查 PDF 是否损坏或已存在`)
+    }
     files.value = []
     uploadRef.value?.clearFiles()
   } finally {
@@ -79,10 +85,39 @@ async function doUpload() {
 </script>
 
 <style scoped>
+:deep(.main > div > .el-card) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+:deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+}
 .toolbar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 16px;
+  flex: 1;
+}
+.toolbar .el-upload {
+  flex: 1;
+  max-width: 560px;
+  min-width: 0;
+  display: flex;
+}
+.toolbar .el-upload-dragger {
+  width: 100%;
+  flex: 1;
+  padding: 8px;
+  min-height: 220px;
+}
+.toolbar .upload-btn {
+  align-self: center;
 }
 .upload-box {
   padding: 8px 24px;
