@@ -16,10 +16,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.SecureRandom;
 import java.util.UUID;
 
 @Service
 public class InvoiceService {
+
+    private static final SecureRandom RNG = new SecureRandom();
 
     private final InvoiceRepository repository;
     private final com.example.invoice.service.InvoiceParser parser;
@@ -58,8 +61,10 @@ public class InvoiceService {
         // number we keep the file but store a sentinel so the NOT NULL/UNIQUE columns hold.
         // The sentinel must fit the VARCHAR(20) column, hence the truncated UUID suffix.
         String number = p.invoiceNumber();
+        // pocfile: 12 hex chars = 48 bits CSPRNG, plenty for sentinel uniqueness.
+        // UUID.randomUUID().toString() 全 32 字符再 substring 是浪费：每次分配 + 格式化。
         String sentinel = number != null ? null
-                : "UNKNOWN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+                : "UNKNOWN-" + String.format("%012x", RNG.nextLong() & 0xFFFFFFFFFFFFL);
 
         String filename = buildFilename(p, name, sentinel);
         Path dest = uploadDir.resolve(filename);

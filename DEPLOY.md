@@ -16,6 +16,7 @@
 
 - 前端构建产物（`web/Dockerfile` 多阶段）与后端 jar（`server/Dockerfile`）都已进镜像
 - 单机 `docker compose up --build` 一次拉起，不依赖宿主机预构建产物
+- **JWT 登录认证**：`/api/auth/**` 公开（login/ping），其余 `/api/**` 需 `Authorization: Bearer <token>`；`/api/auth/ping` 供 healthcheck
 
 ---
 
@@ -61,7 +62,27 @@ sudo apt update && sudo apt install -y caddy
 
 ## 3. 代码与配置上传
 
-### 3.1 本地构建镜像并传输（推荐，省云端拉取时间）
+先把项目放到服务器，二选一：
+
+### 3.0 方式一：源码直接部署（有源码网络）
+
+服务器有完整源码（git clone / scp 整个仓库），`docker compose up --build` 就地构建，**不用预打包镜像**：
+
+```bash
+git clone <仓库地址> /opt/invoice   # 或 scp -r 整个项目到 /opt/invoice
+cd /opt/invoice
+cp .env.example .env                # 手动改各区强密码，见 §4.1
+docker compose up -d --build        # 就地构建三镜像（maven/node 基础镜像需下载，网络慢会久）
+docker compose ps
+```
+
+- 构建产物全在镜像内，宿主机无需 JDK / Node / Maven
+- 云端首次需拉 `maven:3.9-eclipse-temurin-25` / `node:22-alpine` 两个构建镜像，海外直连通常 OK；国内若慢配镜像源
+- 更新：拉新代码后 `docker compose up -d --build` 即可
+
+> 若云端拉构建镜像慢，跳下方 **方式二**（本地预构建传输）。
+
+### 3.1 方式二：本地构建镜像并传输（省云端拉取时间）
 
 云端拉 `maven:3.9-eclipse-temurin-25` / `node:22-alpine` 基础镜像较慢，本地先构建好：
 
@@ -79,9 +100,9 @@ docker load < images.tar.gz
 
 > 基础镜像（mysql/nginx/temurin/node）在云端 `docker compose up` 时按需拉取。
 
-### 3.2 上传项目文件
+### 3.2 上传项目文件（仅方式二需要）
 
-只需 3 个文件（源码不需要上云）：
+方式一源码已在服务器，此节跳过。方式二只需 3 个文件：
 
 ```bash
 scp docker-compose.yml root@<服务器IP>:/opt/invoice/
@@ -109,10 +130,16 @@ MYSQL_ROOT_PASSWORD=更换为强密码
 LLM_API_KEY=你的新 key
 APP_LLM_MODEL=big-pickle
 APP_LLM_BASE_URL=https://opencode.ai/zen/v1
+# 登录认证：
+JWT_SECRET=更换为随机强密钥
+APP_ADMIN_USERNAME=admin
+APP_ADMIN_PASSWORD=更换为强密码
 ```
 
 **安全要求**：
 - `DB_PASSWORD` 别用 `Invoice123!`，生成随机强密码：`openssl rand -base64 18`
+- `JWT_SECRET` 必须设置，否则后端回退 dev 默认密钥（不安全）——同样用 `openssl rand -base64 48`
+- `APP_ADMIN_PASSWORD` 别用默认 `admin123`，生产必须改
 - 云上 `chmod 600 .env`
 - 本地/云端 `.env` 都是 gitignored，**绝不提交仓库**
 
@@ -123,6 +150,10 @@ APP_LLM_BASE_URL=https://opencode.ai/zen/v1
 | `DB_PASSWORD` | `Invoice123!`（开发） | 随机强密码 |
 | `APP_LLM_BASE_URL` | `https://opencode.ai/zen/v1` | 相同（海外可达） |
 | `LLM_API_KEY` | 你的 key | 同 key 或云上新 key |
+| `JWT_SECRET` | 本地随机值（已在根 `.env`） | 云上新随机值（**两端不同**，改了 token 全失效可接受） |
+| `APP_ADMIN_PASSWORD` | `admin123`（开发） | 随机强密码 |
+
+> 登录说明：默认管理员 `admin`，密码由 `APP_ADMIN_PASSWORD` 指定（不设则 `admin123`）。JWT 24h 过期，前端 localStorage 存 token。
 
 ---
 
@@ -194,8 +225,14 @@ http://<VPS-IP>:8088
 ```bash
 cd /opt/invoice
 docker compose up -d
-docker compose ps          # 三个服务应 healthy
-curl -s http://localhost:8088/api/invoices   # → {"content":[],...}
+docker compose ps                 # 三个服务应 healthy
+curl -s http://localhost:8088/api/auth/ping   # → pong（公开探活）
+# 业务端点已 401 保护：先登录拿 token 再访问
+TOKEN=$(curl -s -X POST http://localhost:8088/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$APP_ADMIN_USERNAME\",\"password\":\"$APP_ADMIN_PASSWORD\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+curl -s http://localhost:8088/api/invoices -H "Authorization: Bearer $TOKEN"   # → {"content":[],...}
 ```
 
 浏览器访问：
@@ -203,9 +240,10 @@ curl -s http://localhost:8088/api/invoices   # → {"content":[],...}
 - 有域名 → `https://invoice.example.com`（5.2）
 
 验证项：
-1. 列表页正常渲染
-2. 上传样例 PDF → 解析 → 入库 → 列表出现
-3. 预览/下载/删除可用
+1. 浏览器访问 → 跳 `/login` → 用 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` 登录成功
+2. 列表页正常渲染
+3. 上传样例 PDF → 解析 → 入库 → 列表出现
+4. 预览/下载/删除可用
 
 **验证 LLM 兜底**（可选）：上传一张正则解析不全的发票，`docker compose logs backend | grep "LLM fill"` 应有调用记录。
 
@@ -252,20 +290,28 @@ docker compose up -d --build         # 更新（改代码后）
 docker compose down -v               # 停+清卷（⚠️ 删数据，先备份）
 ```
 
-**更新部署流程**：
+**更新部署流程**（与 §3 两种方式对应）：
 ```bash
-# 本地
+# 方式一（源码在服务器）：拉新代码后就地重建
+cd /opt/invoice && git pull && docker compose up -d --build
+
+# 方式二（本地打包传输）：
+#   本地
 docker compose build && docker save invoice-backend:1.0.0 invoice-web:1.0.0 | gzip > images.tar.gz
 scp images.tar.gz root@<服务器IP>:/root/
-# 云端
+#   云端
 docker load < images.tar.gz && cd /opt/invoice && docker compose up -d
 ```
+
+> 两种方式共用同一个 `schema.sql`（initdb）与命名卷，切换方式不影响已有数据。
 
 ---
 
 ## 9. 安全清单（部署前逐项确认）
 
 - [ ] `.env` `chmod 600`，强密码，未进仓库
+- [ ] `JWT_SECRET` 已设强随机值（未设 = dev 默认密钥，可伪造 token）
+- [ ] `APP_ADMIN_PASSWORD` 已改（未改 = `admin123`，可被猜）
 - [ ] MySQL 端口**未**暴露公网（compose 无 `3306:3306` 映射）
 - [ ] HTTPS 已启用（Cloudflare Tunnel 或 Caddy）
 - [ ] backend/nginx 有 `restart: unless-stopped`

@@ -33,7 +33,7 @@
     />
   </el-card>
 
-  <el-dialog v-model="previewVisible" :title="previewTitle" width="70%" top="5vh" destroy-on-close>
+  <el-dialog v-model="previewVisible" :title="previewTitle" width="70%" top="5vh" destroy-on-close @closed="onPreviewClosed">
     <iframe :src="previewUrl" class="preview-frame" />
   </el-dialog>
 </template>
@@ -41,7 +41,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listInvoices, deleteInvoice, fileUrl } from '../api/invoice'
+import { listInvoices, deleteInvoice, fetchFile } from '../api/invoice'
 
 const rows = ref([])
 const total = ref(0)
@@ -75,17 +75,40 @@ function formatTime(t) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
-function preview(row) {
-  previewTitle.value = `发票预览 - ${row.invoiceNumber}`
-  previewUrl.value = fileUrl(row.id, 'inline')
-  previewVisible.value = true
+async function preview(row) {
+  // 替换前先 revoke，避免连续预览时上一次的 blob 仍驻留内存
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = ''
+  try {
+    const { url } = await fetchFile(row.id, 'inline')
+    previewUrl.value = url
+    previewTitle.value = `发票预览 - ${row.invoiceNumber}`
+    previewVisible.value = true
+  } catch {
+    ElMessage.error('加载预览失败')
+  }
 }
 
-function download(row) {
-  const a = document.createElement('a')
-  a.href = fileUrl(row.id, 'download')
-  a.download = `${row.invoiceNumber}.pdf`
-  a.click()
+function onPreviewClosed() {
+  // destroy-on-close 销毁 iframe，但 blob URL 需手动 revoke 才释放 PDF 字节
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
+}
+
+async function download(row) {
+  try {
+    const { url } = await fetchFile(row.id, 'download')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${row.invoiceNumber}.pdf`
+    a.click()
+    // 浏览器已开始下载，立即 revoke 安全
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('下载失败')
+  }
 }
 
 async function confirmDelete(row) {
@@ -122,7 +145,7 @@ onMounted(load)
   margin-top: 16px;
   justify-content: flex-end;
 }
-/* 窄屏：分页居中 */
+/* 窄屏：分页居中；768 与其他处对齐见 src/styles/tokens.css */
 @media (max-width: 768px) {
   .pager {
     justify-content: center;

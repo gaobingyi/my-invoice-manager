@@ -1,5 +1,5 @@
 <template>
-  <el-container class="layout">
+  <el-container v-if="routeReady && !isLoginPage" class="layout">
     <el-aside :width="collapsed ? '64px' : '180px'" class="sidebar">
       <div class="sidebar-logo">
         <img src="/invoice-icon.svg" class="sidebar-logo-icon" alt="logo" />
@@ -30,55 +30,73 @@
       <el-header class="header">
         <div class="header-title">
           <span class="header-crumb">首页</span>
-          <span class="header-current">{{ activeMenu === 'upload' ? '发票上传' : '发票列表' }}</span>
-       </div>
-        <el-switch
-          class="theme-switch"
-          v-model="isDark"
-          inline-prompt
-          active-text="暗色"
-          inactive-text="亮色"
-          @change="applyTheme"
-        />
+          <span class="header-current">{{ pageTitle }}</span>
+        </div>
+        <div class="header-right">
+          <el-switch
+            class="theme-switch"
+            v-model="isDark"
+            inline-prompt
+            active-text="暗色"
+            inactive-text="亮色"
+            @change="applyTheme"
+          />
+          <el-dropdown trigger="click" @command="onUserCommand">
+            <span class="user-entry">
+              <el-icon><user-filled /></el-icon>
+              <span>{{ username }}</span>
+              <el-icon><arrow-down /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </el-header>
       <el-main class="main">
-        <InvoiceUpload
-          v-if="activeMenu === 'upload'"
-          @uploaded="onUploaded"
-        />
-        <InvoiceList v-else />
+        <router-view />
       </el-main>
     </el-container>
   </el-container>
+  <router-view v-else-if="routeReady" />
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { UploadFilled, Tickets, Fold, Expand } from '@element-plus/icons-vue'
-import InvoiceList from './views/InvoiceList.vue'
-import InvoiceUpload from './views/InvoiceUpload.vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { UploadFilled, Tickets, Fold, Expand, UserFilled, ArrowDown } from '@element-plus/icons-vue'
+import { getUsername, setToken, setUsername } from './api/invoice'
+import { isDark, applyTheme } from './utils/theme'
 
-const isDark = ref(localStorage.getItem('theme') === 'dark')
-const activeMenu = ref(localStorage.getItem('activeMenu') || 'upload')
+const router = useRouter()
+const route = useRoute()
+
 const collapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
+const username = ref(getUsername() || 'admin')
 
-function applyTheme() {
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
+const activeMenu = computed(() => (route.path.startsWith('/list') ? 'list' : 'upload'))
+const pageTitle = computed(() => (activeMenu.value === 'upload' ? '发票上传' : '发票列表'))
+const isLoginPage = computed(() => route.path === '/login')
+// 首次导航 resolve 前不渲染，避免暗黑下先闪 Layout 再跳登录页
+const routeReady = ref(false)
+router.isReady().finally(() => { routeReady.value = true })
 
 function onMenuSelect(index) {
-  activeMenu.value = index
-  localStorage.setItem('activeMenu', index)
-  if (window.innerWidth <= 768) {
+  router.push(index === 'upload' ? '/upload' : '/list')
+  if (window.matchMedia('(max-width: 768px)').matches) {
     collapsed.value = true
     localStorage.setItem('sidebarCollapsed', 'true')
   }
 }
 
-function onUploaded() {
-  activeMenu.value = 'list'
-  localStorage.setItem('activeMenu', 'list')
+function onUserCommand(command) {
+  if (command === 'logout') {
+    setToken(null)
+    setUsername(null)
+    router.push('/login')
+  }
 }
 
 function toggleCollapsed() {
@@ -88,7 +106,7 @@ function toggleCollapsed() {
 
 onMounted(() => {
   applyTheme()
-  if (window.innerWidth <= 768 && !localStorage.getItem('sidebarCollapsed')) {
+  if (window.matchMedia('(max-width: 768px)').matches && !localStorage.getItem('sidebarCollapsed')) {
     collapsed.value = true
   }
 })
@@ -123,6 +141,17 @@ body { background: var(--el-bg-color-page); }
 .header-crumb { color: var(--el-text-color-secondary); font-weight: 400; }
 .header-crumb::after { content: " / "; margin: 0 6px; color: var(--el-text-color-placeholder); }
 .header-current { color: var(--el-text-color-regular); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.user-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  outline: none;
+}
+.user-entry:hover { color: var(--el-color-primary); }
 /* 左侧菜单：占满高度，无外边框；overflow hidden 防止收起时任何内部横向溢出带出滚动条 */
 .sidebar {
   position: relative;
@@ -172,29 +201,5 @@ body { background: var(--el-bg-color-page); }
 .sidebar-toggle:hover {
   color: var(--el-color-primary);
 }
-/* 开关加高、加宽，文字留呼吸空间 */
-.theme-switch {
-  min-width: 64px;
-}
-.theme-switch .el-switch__core {
-  height: 26px;
-  border-radius: 13px;
-}
-.theme-switch .el-switch__core .el-switch__inner {
-  padding: 0 12px 0 26px;
-}
-.theme-switch.is-checked .el-switch__core .el-switch__inner {
-  padding: 0 26px 0 12px;
-}
-.theme-switch .el-switch__core .el-switch__action {
-  width: 20px;
-  height: 20px;
-}
-.theme-switch.is-checked .el-switch__core .el-switch__action {
-  left: calc(100% - 21px);
-}
-/* 开关 inline-prompt 文字默认硬编码白（.el-switch__inner-wrapper），亮色下跟随主题文字色 */
-html:not(.dark) .theme-switch .el-switch__inner-wrapper {
-  color: var(--el-text-color-regular);
-}
+/* .theme-switch 样式见 src/styles/tokens.css（App.vue / Login.vue 共享） */
 </style>

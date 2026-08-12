@@ -5,16 +5,38 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// 后端已加 JWT 认证：API 直调需先登录拿 token。
+let token = null
+async function login() {
+  const res = await fetch('http://localhost:5173/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+  })
+  if (!res.ok) throw new Error(`login -> ${res.status}`)
+  token = (await res.json()).token
+  console.log('  login OK (token length ' + token.length + ')')
+  // 更强断言：登录拿到的 token 必须能访问受保护端点
+  const authRes = await fetch('http://localhost:5173/api/invoices?page=0&size=1', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!authRes.ok) throw new Error(`login token invalid -> ${authRes.status} ${await authRes.text()}`)
+}
+
+function authHeaders() {
+  return { Authorization: `Bearer ${token}` }
+}
+
 // Reset DB to a clean slate before the test: delete every invoice via the API so
 // the sample PDF (fixed invoice number) can be uploaded without a 409 duplicate.
 async function resetInvoices() {
   const api = 'http://localhost:5173/api/invoices'
   for (;;) {
-    const res = await fetch(`${api}?page=0&size=20`)
+    const res = await fetch(`${api}?page=0&size=20`, { headers: authHeaders() })
     const { content } = await res.json()
     if (!content.length) break
     for (const r of content) {
-      const d = await fetch(`${api}/${r.id}`, { method: 'DELETE' })
+      const d = await fetch(`${api}/${r.id}`, { method: 'DELETE', headers: authHeaders() })
       if (!d.ok) throw new Error(`reset: delete ${r.id} -> ${d.status}`)
     }
   }
@@ -37,6 +59,7 @@ function check(name, cond) {
   else { fail++; console.log(`  ❌ ${name}`) }
 }
 
+await login()
 await resetInvoices()
 console.log('0) 清理数据库')
 
@@ -64,9 +87,25 @@ try {
     }
   })
 
+  // --- 0. auth guard: 未登录访问 / 跳 /login ---
+  console.log('\n0) 登录守卫')
+  await page.goto(BASE, { waitUntil: 'networkidle0', timeout: 20000 })
+  check('未登录跳转 /login', page.url().includes('/login'))
+  await page.screenshot({ path: path.join(SHOT_DIR, '0-login.png') })
+
+  // 注入 token 后重新加载，应进入主界面（上传视图）
+  await page.evaluate((t, u) => {
+    localStorage.setItem('token', t)
+    localStorage.setItem('username', u)
+    location.reload()
+  }, token, 'admin')
+  await page.waitForSelector('input[type=file]', { timeout: 10000 })
+  check('登录后进入上传视图', page.url().endsWith('/upload') || page.url().endsWith('/'))
+  await page.screenshot({ path: path.join(SHOT_DIR, '0-logged-in.png') })
+
   // --- 1. load ---
   console.log('\n1) 加载页面')
-  await page.goto(BASE, { waitUntil: 'networkidle0', timeout: 20000 })
+  await page.goto(BASE + '/upload', { waitUntil: 'networkidle0', timeout: 20000 })
   // 默认是上传视图；在 upload 视图找到 file input 即视为就绪
   await page.waitForSelector('input[type=file]', { timeout: 10000 })
   check('上传视图就绪', true)
@@ -176,7 +215,7 @@ try {
   // --- 7. cleanup: leave the DB empty ---
   console.log('\n7) 清理数据')
   await resetInvoices()
-  const remaining = (await (await fetch('http://localhost:5173/api/invoices?page=0&size=20')).json()).totalElements
+  const remaining = (await (await fetch('http://localhost:5173/api/invoices?page=0&size=20', { headers: authHeaders() })).json()).totalElements
   check(`DB 归零 (剩余 ${remaining})`, remaining === 0)
 
 } finally {

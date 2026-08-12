@@ -87,8 +87,17 @@ docker compose down -v                  # 停止+清卷
 - 解析不出号码 → 存 `UNKNOWN-<12位hex>` 哨兵（必须 ≤ VARCHAR(20)，不可用完整 UUID）。
 - 入库违反 UNIQUE（并发重复）→ 删文件 + 409。
 
+## 认证架构（JWT）
+
+- 登录：`POST /api/auth/login`（body `{username,password}`）→ `{token,username}`。**公开**路径只有 `/api/auth/**`（含 `GET /api/auth/ping`，供 Docker healthcheck），其余 `/api/**` 一律 401。
+- 用户表 `app_user`：单管理员，启动时 `AuthService.run` 若无用户则 seed（`APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 覆盖，默认 `admin`/`admin123`），BCrypt 散列。密码错误 → `BadCredentialsException` → 401。
+- 认证链路：`JwtAuthenticationFilter`（Bearer 解析 → `SecurityContextHolder`）→ `JwtTokenService`（jjwt，secret 从 `JWT_SECRET` 读，默认值仅限 dev）。CSRF 关闭、无 Session（STATELESS）。
+- **文件端点带不了 header**：预览/下载前端用 `fetchFile()`（axios `responseType: 'blob'`）取回 object URL，不再用裸 URL 字符串。改前端勿退回 `fileUrl()` 裸链。
+- E2E/健康检查：所有 API 直调需 `Authorization: Bearer` 头；E2E 先登录拿 token，页面用 `evaluateOnNewDocument` 注入 localStorage。
+
 ## API
 
+- `POST /api/auth/login`、`GET /api/auth/ping`
 - `POST /api/invoices/upload`（multipart `file`）
 - `GET /api/invoices?page=&size=`（分页，按 createdAt 倒序）
 - `DELETE /api/invoices/{id}`
@@ -96,7 +105,8 @@ docker compose down -v                  # 停止+清卷
 
 ## 前端要点
 
-- `web/src/views/InvoiceList.vue`：上传按钮 `.upload-btn`（E2E 选择器）、批量上传（`:limit="20"`，循环调用）、列表（销售方/购买方/项目名称/上传时间等列）、预览用 el-dialog + iframe、下载用隐藏 `<a download>`。
+- 路由（`web/src/router/index.js`）：`/login` 公开，`/upload`、`/list` 挂在 `/` Layout 下；`beforeEach` 守卫无 token 跳 `/login`。`App.vue` 是 Layout（侧栏 + header 用户下拉），不再持有 activeMenu 状态机。
+- `web/src/views/InvoiceList.vue`：上传按钮 `.upload-btn`（E2E 选择器）、批量上传（`:limit="20"`，循环调用）、列表（销售方/购买方/项目名称/上传时间等列）、预览用 el-dialog + iframe（src 为 `fetchFile()` 的 blob URL）、下载用隐藏 `<a download>`。
 - `web/e2e/run.mjs` 断言依赖这些 Element Plus DOM 结构，改前端时勿破坏。
 
 ## 开发环境坑（WSL2 + IDEA）

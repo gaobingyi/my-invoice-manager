@@ -82,21 +82,26 @@ public class InvoiceParser {
         // 157.52+20.48=178.00). Solve the relation instead of assuming max=价税/min=税额:
         // the max/min heuristics silently mislabel a zero-tax invoice (金额==价税, 税额=0.00)
         // and any invoice where two of the three values collide.
+        // pocfile: 三 ¥ 值：金额、税额、价税合计，满足 金额+税额=价税合计（max）且 金额>=税额。
+        // 一次扫描取 max / min，再从剩下的挑 mid 验证不变量；O(n) 取代旧 O(n³) 三重循环。
         List<BigDecimal> yens = allDecimal(YEN, text);
         BigDecimal totalAmount = null, taxAmount = null, totalWithTax = null;
-        outer:
-        for (BigDecimal a : yens) {
-            for (BigDecimal b : yens) {
-                if (a.compareTo(b) < 0) continue;   // 金额 >= 税额; this also resolves a zero-tax invoice where 金额 == 价税
-                BigDecimal c = a.add(b);
-                for (BigDecimal x : yens) {
-                    if (x.compareTo(c) == 0) {   // 金额 + 税额 = 价税合计
-                        totalAmount = a;
-                        taxAmount = b;
-                        totalWithTax = c;
-                        break outer;
-                    }
-                }
+        if (yens.size() >= 3) {
+            BigDecimal max = yens.get(0), min = max;
+            for (BigDecimal y : yens) {
+                if (y.compareTo(max) > 0) max = y;
+                if (y.compareTo(min) < 0) min = y;
+            }
+            // pick a value that's neither max nor min — falls back to max when duplicates exist
+            BigDecimal mid = max;
+            for (BigDecimal y : yens) {
+                if (y.compareTo(max) != 0 && y.compareTo(min) != 0) { mid = y; break; }
+            }
+            // 不变量：金额 + 税额 = 价税合计（max）。不满足时留空，让 LLM 兜底。
+            if (mid.add(min).compareTo(max) == 0) {
+                totalAmount = mid;
+                taxAmount = min;
+                totalWithTax = max;
             }
         }
 
