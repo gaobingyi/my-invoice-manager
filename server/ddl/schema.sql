@@ -30,3 +30,15 @@ CREATE TABLE IF NOT EXISTS invoice (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT ='发票表';
+
+CREATE TABLE IF NOT EXISTS app_user (
+  id            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  username      VARCHAR(64)  NOT NULL                COMMENT '登录名',
+  password_hash VARCHAR(100) NOT NULL                COMMENT 'BCrypt 密码散列',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_username (username)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  COMMENT ='登录用户表';

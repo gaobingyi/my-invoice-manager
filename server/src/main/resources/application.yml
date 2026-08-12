@@ -15,6 +15,14 @@ spring:
 
 app:
   upload-dir: ./uploads
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-production-please-32bytes-or-more}
+    expire-seconds: 86400   # 24h
+  admin:
+    username: ${APP_ADMIN_USERNAME:admin}
+    password: ${APP_ADMIN_PASSWORD:admin123}
+  auth:
+    rate-limit-enabled: true
   llm:
     base-url: https://opencode.ai/zen/v1
     model: big-pickle

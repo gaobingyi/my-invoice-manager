@@ -40,6 +40,9 @@ services:
       APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-https://opencode.ai/zen/v1}
       APP_LLM_MODEL: ${APP_LLM_MODEL:-oc/deepseek-v4-flash-free}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME:-admin}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?set APP_ADMIN_PASSWORD in .env}
       TZ: Asia/Shanghai
       JAVA_OPTS: -Xmx256m -Xms128m -XX:+UseSerialGC -XX:MaxRAMPercentage=50
     volumes:
@@ -47,7 +50,7 @@ services:
       - backend-logs:/app/logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/invoices?page=0&size=1"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/auth/ping"]
       interval: 10s
       timeout: 5s
       retries: 5
