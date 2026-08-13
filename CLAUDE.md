@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 后端测试（解析器单元测试，无需 DB/LLM）
 cd server && mvn test
 
-# 后端单独测试类
+# 后端单独测试类（另有 JwtTokenServiceTest、SecurityConfigTest）
 cd server && mvn test -Dtest=InvoiceParserTest
 
 # 启动后端（需先起 MySQL，见下）
@@ -77,7 +77,12 @@ docker compose down -v                  # 停止+清卷
 
 ## 数据模型
 
-`invoice` 表（`server/ddl/schema.sql`）：`invoice_number` UNIQUE（重复上传→409）、购/销方名称+税号、`total_amount`/`tax_amount`/`total_with_tax`（DECIMAL(10,2)）、`category`（如 `*餐饮服务*餐饮服务`）、`drawer`、`file_path`（磁盘相对路径）、`created_at`。JPA `ddl-auto: validate`，schema 由 SQL 文件管理，改实体需同步改 schema.sql。
+两表，`server/ddl/schema.sql`：
+
+- `invoice`：`invoice_number` UNIQUE（重复上传→409）、购/销方名称+税号、`total_amount`/`tax_amount`/`total_with_tax`（DECIMAL(10,2)）、`category`（如 `*餐饮服务*餐饮服务`）、`drawer`、`file_path`（磁盘相对路径）、`created_at`。
+- `app_user`：JWT 认证用单管理员表，存 BCrypt 散列（见认证架构）。
+
+JPA `ddl-auto: validate`，schema 由 SQL 文件管理，改实体需同步改 schema.sql。
 
 ## 上传流程（`InvoiceService.upload`）
 
@@ -91,6 +96,7 @@ docker compose down -v                  # 停止+清卷
 
 - 登录：`POST /api/auth/login`（body `{username,password}`）→ `{token,username}`。**公开**路径只有 `/api/auth/**`（含 `GET /api/auth/ping`，供 Docker healthcheck），其余 `/api/**` 一律 401。
 - 用户表 `app_user`：单管理员，启动时 `AuthService.run` 若无用户则 seed（`APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD` 覆盖，默认 `admin`/`admin123`），BCrypt 散列。密码错误 → `BadCredentialsException` → 401。
+- 登录限流：`LoginRateLimiter`（内存计数，按 IP+用户名，配置 `app.auth.rate-limit-enabled`，默认开启），防暴力破解。
 - 认证链路：`JwtAuthenticationFilter`（Bearer 解析 → `SecurityContextHolder`）→ `JwtTokenService`（jjwt，secret 从 `JWT_SECRET` 读，默认值仅限 dev）。CSRF 关闭、无 Session（STATELESS）。
 - **文件端点带不了 header**：预览/下载前端用 `fetchFile()`（axios `responseType: 'blob'`）取回 object URL，不再用裸 URL 字符串。改前端勿退回 `fileUrl()` 裸链。
 - E2E/健康检查：所有 API 直调需 `Authorization: Bearer` 头；E2E 先登录拿 token，页面用 `evaluateOnNewDocument` 注入 localStorage。
