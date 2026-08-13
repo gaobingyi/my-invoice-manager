@@ -104,8 +104,9 @@ async function download(row) {
     a.href = url
     a.download = `${row.invoiceNumber}.pdf`
     a.click()
-    // 浏览器已开始下载，立即 revoke 安全
-    URL.revokeObjectURL(url)
+    // a.click() 仅异步排队下载，立即释放 blob 可能让浏览器取到 0 字节；
+    // 延迟 revoke，给下载流启动留出时间。
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch {
     ElMessage.error('下载失败')
   }

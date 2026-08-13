@@ -37,8 +37,11 @@ public class AuthController {
     }
 
     private static String clientIp(HttpServletRequest req) {
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        // 优先信任 nginx 设置的 X-Real-IP（不可被客户端伪造）。
+        // 不用 X-Forwarded-For：它会追加客户端自带的 XFF 头，split(",")[0] 取到的是
+        // 可伪造值，攻击者可借此绕过登录限流并定向陷害某 IP。
+        String realIp = req.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) return realIp.trim();
         return req.getRemoteAddr();
     }
 }

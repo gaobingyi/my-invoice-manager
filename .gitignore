@@ -21,6 +21,11 @@ web/e2e/screenshots/
 .env.local
 .mcp.json
 
+# ---- TLS 证书与私钥（Cloudflare Origin Cert / 本地自签）----
+certs/
+*.pem
+*.key
+
 # ---- IDE ----
 .idea/
 server/.idea/
