@@ -1,8 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Write(**)",
-      "Bash(*)"
+      "Edit(**)",
+      "Read(**)",
+      "Glob(**)",
+      "Grep(**)"
     ],
     "defaultMode": "acceptEdits"
   }
